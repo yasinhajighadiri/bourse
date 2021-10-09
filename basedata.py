@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+import re
 import requests
 from bs4 import BeautifulSoup
 
@@ -17,51 +18,61 @@ def get_page(url):
 
 
 
-
 def find_links_per_page(html_doc):
     soup = BeautifulSoup(html_doc, 'html.parser')
-    return soup.text
+    return soup.select('#form1 > script:nth-child(2)')
+
+
+'''
+link = 'http://tsetmc.com/Loader.aspx?ParTree=15'
+response_page = get_page(link)
+links = find_links(response_page.text)
+'''
+
+def creat_all_links_list(idlist):
+    all_links_list=[]
+    all_links_list_data=[]
+    for id in idlist:
+        all_links_list.append(f'http://tsetmc.com/Loader.aspx?ParTree=151311&i={id}')
+        all_links_list_data.append(f'http://tsetmc.com/tsev2/data/instinfofast.aspx?i={id}&c=23%20')
+    return all_links_list,all_links_list_data
 
 
 
-
-conbourse = sqlite3.connect('bourse.db')
-consalam = sqlite3.connect('salam.db')
-curbourse = conbourse.cursor()
-cursalam = consalam.cursor()
+con = sqlite3.connect('bourse.db')
+cur = con.cursor()
 
 
-cursalam.execute("""CREATE TABLE data_per_page(
-    number INTEGER PRIMARY KEY,
-    InstrumentID text,
-    InsCode INTEGER,
-    LVal18AFC text,
-    Title text,
-    lastdata INTEGER,
-    enddata INTEGER,
-    timestamp datetime
-    
+cur.execute('''CREATE TABLE data(
+                InstrumentID text,
+                InsCode text,
+                LVal18AFC text,
+                Title text)''')
 
-)""")
+
+all_links_list=creat_all_links_list(all_id)
+
+for li in all_links_list[0]:
+    try:
+        response=get_page(li)
+        links=find_links_per_page(response.text)
+        InstrumentID=re.search("InstrumentID='(.+)',Ins", str(links)).group(1)
+        InsCode=re.search("InsCode=\'(.+)\',Base", str(links)).group(1)
+        LVal18AFC=re.search("LVal18AFC='(.+)\',DEve", str(links)).group(1)
+        Title=re.search("Title=\'(.+) \(.+-.+\',Fara", str(links)).group(1)
+        tess="""INSERT INTO data (InstrumentID,InsCode,LVal18AFC,Title) VALUES (?,?,?,?);"""
+        data=(InstrumentID,InsCode,LVal18AFC,Title)
+        cur.execute(tess,data)
+    except:
+        pass
+
 
 # Insert a row of data
-for row in conbourse.execute("select * from data"):
-    link_payani='http://www.tsetmc.com/tsev2/data/instinfodata.aspx?i={}&c=73%20'.format(row[1])
-    response = get_page(link_payani)
-    links=find_links_per_page(response.text).split(',')
-    l1=list(row)
-    l1.append(links[2])
-    l1.append(links[3])
-    l1.append(datetime.datetime.today())
-    tess = """INSERT INTO data_per_page (InstrumentID,InsCode,LVal18AFC,Title,lastdata,enddata,timestamp) VALUES (?,?,?,?,?,?,?);"""
-    all_data=tuple(l1)
-    cursalam.execute(tess, all_data)
 
-
-for row in consalam.execute("select * from data_per_page"):
+for row in con.execute("select * from data"):
     print(row)
 # Save (commit) the changes
-# Save (commit) the changes
+con.commit()
 
 
 
